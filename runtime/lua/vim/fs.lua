@@ -190,6 +190,14 @@ end
 --- Use `math.huge` to place no limit on the number of matches.
 --- (default: `1`)
 --- @field limit? number
+---
+--- Do not traverse matching directories.
+--- If omitted, all directories are searched recursively.
+--- @field skip? (fun(dir_name: string): boolean)|nil
+---
+--- Follow symbolic links.
+--- (default: `true`)
+--- @field follow? boolean
 
 --- Find files or directories (or other items as specified by `opts.type`) in the given path.
 ---
@@ -235,6 +243,8 @@ function M.find(names, opts)
   vim.validate('stop', opts.stop, 'string', true)
   vim.validate('type', opts.type, 'string', true)
   vim.validate('limit', opts.limit, 'number', true)
+  vim.validate('follow', opts.follow, 'boolean', true)
+  vim.validate('skip', opts.skip, 'function', true)
 
   if type(names) == 'string' then
     names = { names }
@@ -308,6 +318,8 @@ function M.find(names, opts)
 
       for other, type_ in M.dir(dir) do
         local f = M.joinpath(dir, other)
+        local stat = vim.uv.fs_stat(f)
+        local is_dir = stat and stat.type == 'directory'
         if type(names) == 'function' then
           if (not opts.type or opts.type == type_) and names(other, dir) then
             if add(f) then
@@ -324,7 +336,10 @@ function M.find(names, opts)
           end
         end
 
-        if type_ == 'directory' then
+        if
+          (type_ == 'directory' or (is_dir and opts.follow ~= false))
+          and (not opts.skip or opts.skip(f) ~= false)
+        then
           dirs[#dirs + 1] = f
         end
       end
