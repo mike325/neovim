@@ -202,6 +202,14 @@ end
 --- Use `math.huge` to place no limit on the number of matches.
 --- (default: `1`)
 --- @field limit? number
+---
+--- Do not traverse matching directories.
+--- If omitted, all directories are searched recursively.
+--- @field skip? (fun(dir: string): boolean)
+---
+--- Follow symbolic links.
+--- (default: `true`)
+--- @field follow? boolean
 
 --- Find files or directories (or other items as specified by `opts.type`) in the given path.
 ---
@@ -247,7 +255,10 @@ function M.find(names, opts)
   vim.validate('stop', opts.stop, 'string', true)
   vim.validate('type', opts.type, 'string', true)
   vim.validate('limit', opts.limit, 'number', true)
+  vim.validate('follow', opts.follow, 'boolean', true)
+  vim.validate('skip', opts.skip, 'function', true)
 
+  local print_info = opts.follow ~= nil or opts.skip ~= nil
   if type(names) == 'string' then
     names = { names }
   end
@@ -336,7 +347,51 @@ function M.find(names, opts)
           end
         end
 
-        if type_ == 'directory' then
+        if print_info then
+          if M.basename(f):match('^build') then
+            print(
+              string.format(
+                '\nf: %s\ntype_: %s\nreal_type: %s\nopts.follow: %s',
+                f,
+                type_,
+                vim.inspect((vim.uv.fs_stat(f) or {}).type),
+                vim.inspect(opts.follow)
+              )
+            )
+            if type_ == 'directory' or type_ == 'link' then
+              local status, msg, err = vim.uv.fs_stat(f)
+              if not status then
+                print(string.format('Link/Dir info: %s; %s; %s', vim.inspect(status), msg, err))
+              end
+              if opts.skip then
+                print(string.format('Skip: %s', opts.skip(f)))
+              end
+            end
+          end
+        end
+
+        if
+          (
+            type_ == 'directory'
+            or (
+              type_ == 'link'
+              and opts.follow ~= false
+              and (vim.uv.fs_stat(f) or {}).type == 'directory'
+            )
+          ) and (not opts.skip or opts.skip(f) ~= false)
+        then
+          if type_ ~= 'directory' then
+            print(
+              string.format(
+                '\nMatch link directory\nf: %s\ntype_: %s\nreal_type: %s\nopts.follow: %s',
+                f,
+                type_,
+                vim.inspect((vim.uv.fs_stat(f) or {}).type),
+                vim.inspect(opts.follow),
+                vim.inspect(opts.skip and opts.skip(f))
+              )
+            )
+          end
           dirs[#dirs + 1] = f
         end
       end
