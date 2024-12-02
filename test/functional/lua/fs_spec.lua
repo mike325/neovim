@@ -218,7 +218,19 @@ describe('vim.fs', function()
 
   describe('find()', function()
     before_each(function()
-      vim.uv.fs_symlink(test_source_path .. '/build', test_source_path .. '/build_link')
+      local status, msg = vim.uv.fs_symlink(
+        test_source_path .. '/build',
+        test_source_path .. '/build_link',
+        { junction = true, dir = true }
+      )
+      if not status then
+        print(string.format('\nFailed to create build_link symlink, err: %s', msg))
+      else
+        print(
+          '\ntest find() link created',
+          vim.inspect((vim.uv.fs_stat(test_source_path .. '/build_link') or {}).type)
+        )
+      end
     end)
 
     after_each(function()
